@@ -14,9 +14,17 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 
 import { createRequire } from 'module';
+import path from 'path';
+
 const require = createRequire(import.meta.url);
 
-const { connect, markdown } = require('@hcengineering/api-client');
+const {
+  createRestTxOperations,
+  loadServerConfig,
+  getWorkspaceToken,
+} = require('@hcengineering/api-client');
+const apiClientPath = path.dirname(require.resolve('@hcengineering/api-client'));
+const { createMarkupOperations } = require(path.join(apiClientPath, 'markup/client.js'));
 const { generateId } = require('@hcengineering/core');
 const tracker = require('@hcengineering/tracker').default;
 const tags = require('@hcengineering/tags').default;
@@ -59,13 +67,22 @@ async function createConnection() {
     throw new Error('Missing required environment variables: HULY_EMAIL, HULY_PASSWORD, HULY_WORKSPACE');
   }
 
-  const client = await connect(HULY_URL, {
+  const options = {
     email: HULY_EMAIL,
     password: HULY_PASSWORD,
     workspace: HULY_WORKSPACE
-  });
+  };
 
-  return client;
+  const config = await loadServerConfig(HULY_URL);
+  const { endpoint, token, workspaceId } = await getWorkspaceToken(HULY_URL, options, config);
+
+  const txOps = await createRestTxOperations(endpoint, workspaceId, token);
+  const markup = createMarkupOperations(HULY_URL, workspaceId, token, config);
+
+  return Object.assign(Object.create(txOps), {
+    client: txOps,
+    markup
+  });
 }
 
 async function getClient() {
